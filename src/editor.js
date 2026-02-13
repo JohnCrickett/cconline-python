@@ -1,15 +1,19 @@
 // CodeMirror 6 editor module
 import { EditorView, basicSetup } from 'codemirror';
 import { python } from '@codemirror/lang-python';
+import { go } from '@codemirror/lang-go';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
 import { Compartment } from '@codemirror/state';
 import { autocompletion } from '@codemirror/autocomplete';
 import { pythonCompletionSource } from './autocomplete.js';
+import { goCompletionSource } from './go-autocomplete.js';
 
 let editorView = null;
 const themeCompartment = new Compartment();
+const languageCompartment = new Compartment();
+const autocompleteCompartment = new Compartment();
 
 /**
  * Initialize CodeMirror 6 in the given container element.
@@ -21,11 +25,11 @@ export function initEditor(container) {
     doc: 'print("Hello, World!")',
     extensions: [
       basicSetup,
-      python(),
+      languageCompartment.of(python()),
       themeCompartment.of(oneDark),
       keymap.of([indentWithTab]),
       EditorView.lineWrapping,
-      autocompletion({ override: [pythonCompletionSource] }),
+      autocompleteCompartment.of(autocompletion({ override: [pythonCompletionSource] })),
     ],
     parent: container,
   });
@@ -68,5 +72,21 @@ export function setEditorTheme(themeName) {
     effects: themeCompartment.reconfigure(
       themeName === 'dark' ? oneDark : [],
     ),
+  });
+}
+
+/**
+ * Dynamically swap the CodeMirror language mode and autocomplete source.
+ * @param {'python' | 'go'} lang
+ */
+export function setEditorLanguage(lang) {
+  if (!editorView) return;
+  editorView.dispatch({
+    effects: [
+      languageCompartment.reconfigure(lang === 'go' ? go() : python()),
+      autocompleteCompartment.reconfigure(
+        autocompletion({ override: [lang === 'go' ? goCompletionSource : pythonCompletionSource] })
+      ),
+    ],
   });
 }
