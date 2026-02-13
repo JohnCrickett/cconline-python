@@ -60,6 +60,20 @@ function setupWorker() {
       return;
     }
 
+    if (type === 'package-loading') {
+      if (onStatusCallback) {
+        onStatusCallback({ type: 'package-loading', packages: event.data.packages });
+      }
+      return;
+    }
+
+    if (type === 'packages-loaded') {
+      if (onStatusCallback) {
+        onStatusCallback({ type: 'packages-loaded' });
+      }
+      return;
+    }
+
     const pending = pendingRequests.get(id);
     if (!pending) return;
 
@@ -125,7 +139,7 @@ export function retryLoad() {
   setupWorker();
 }
 
-export async function runCode(code) {
+export async function runCode(code, files) {
   if (!worker) {
     throw new Error('Worker not initialized. Call initWorker() first.');
   }
@@ -139,7 +153,7 @@ export async function runCode(code) {
   const executionPromise = new Promise((resolve, reject) => {
     pendingRequests.set(id, { resolve, reject });
     try {
-      worker.postMessage({ type: 'run', code, id });
+      worker.postMessage({ type: 'run', code, files: files || [], id });
     } catch (err) {
       pendingRequests.delete(id);
       reject(new Error('Failed to send code to worker: ' + err.message));
