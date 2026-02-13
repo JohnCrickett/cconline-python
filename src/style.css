@@ -17,6 +17,19 @@
   --success: #a6e3a1;
 }
 
+[data-theme="light"] {
+  --bg-primary: #f8f9fa;
+  --bg-secondary: #ffffff;
+  --bg-surface: #e9ecef;
+  --text-primary: #1e1e2e;
+  --text-secondary: #495057;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --border: #dee2e6;
+  --error: #dc2626;
+  --success: #16a34a;
+}
+
 body {
   font-family: system-ui, -apple-system, sans-serif;
   background-color: var(--bg-primary);
@@ -31,6 +44,9 @@ body {
 }
 
 header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 1.5rem;
 }
 
@@ -38,6 +54,21 @@ header h1 {
   font-size: 1.5rem;
   font-weight: 600;
   color: var(--accent);
+}
+
+#theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 1.2rem;
+  cursor: pointer;
+  line-height: 1;
+  transition: border-color 0.2s;
+}
+
+#theme-toggle:hover {
+  border-color: var(--accent);
 }
 
 #editor-section {
@@ -349,4 +380,152 @@ header h1 {
   color: var(--text-secondary);
   margin-top: 0.5rem;
   font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+}
+
+/* ── Autocomplete popup ───────────────────────────────────────── */
+
+.cm-tooltip-autocomplete {
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.85rem;
+}
+
+.cm-tooltip-autocomplete ul {
+  max-height: 240px;
+}
+
+.cm-tooltip-autocomplete ul li {
+  padding: 4px 8px;
+  color: var(--text-primary, #cdd6f4);
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] {
+  background: var(--accent, #7c3aed);
+  color: #fff;
+}
+
+.cm-tooltip-autocomplete .cm-completionLabel {
+  font-weight: 500;
+}
+
+.cm-tooltip-autocomplete .cm-completionMatchedText {
+  text-decoration: none;
+  color: var(--accent, #7c3aed);
+  font-weight: 700;
+}
+
+.cm-tooltip-autocomplete ul li[aria-selected] .cm-completionMatchedText {
+  color: #fff;
+}
+
+.cm-tooltip-autocomplete .cm-completionDetail {
+  color: var(--text-secondary, #a6adc8);
+  font-style: italic;
+  margin-left: 0.5em;
+}
+
+.cm-completionIcon {
+  padding-right: 4px;
+  opacity: 0.7;
+}
+
+.cm-tooltip.cm-completionInfo {
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border, #3a3a4a);
+  border-radius: 6px;
+  color: var(--text-primary, #cdd6f4);
+  padding: 6px 10px;
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 0.8rem;
+  max-width: 320px;
+}
+
+/* ── Package loading indicator ────────────────────────────────────── */
+
+.package-loading {
+  color: var(--accent);
+  font-size: 0.9rem;
+}
+
+/* ── File tab bar ────────────────────────────────────────────────── */
+
+#file-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.5rem 0.5rem 0;
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  overflow-x: auto;
+}
+
+#file-tabs + #editor-container {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+
+.file-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: 'Fira Code', 'Cascadia Code', 'JetBrains Mono', 'Consolas', monospace;
+  color: var(--text-secondary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background-color 0.2s;
+  white-space: nowrap;
+}
+
+.file-tab:hover {
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+.file-tab.active {
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.file-tab-delete {
+  font-size: 0.9rem;
+  line-height: 1;
+  padding: 0 0.15rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.file-tab-delete:hover {
+  color: var(--error);
+  background-color: rgba(243, 139, 168, 0.15);
+}
+
+.file-tab-add {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.file-tab-add:hover {
+  color: var(--accent);
+  border-color: var(--accent);
 }

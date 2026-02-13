@@ -34,17 +34,24 @@ function writeAll(snippets) {
 /**
  * Save a new snippet or update an existing one with the same name.
  * @param {string} name - Display name for the snippet
- * @param {string} code - The Python source code
+ * @param {string|Array} filesOrCode - Array of {name, code} or a single code string (backward compat)
  * @returns {object} The saved snippet object
  */
-export function saveSnippet(name, code) {
+export function saveSnippet(name, filesOrCode) {
   const snippets = readAll();
   const now = new Date().toISOString();
+
+  // Normalize: string → files array for backward compat
+  const files =
+    typeof filesOrCode === 'string'
+      ? [{ name: 'main.py', code: filesOrCode }]
+      : filesOrCode;
 
   // Update existing snippet with the same name
   const existing = snippets.find((s) => s.name === name);
   if (existing) {
-    existing.code = code;
+    existing.files = files;
+    delete existing.code; // remove legacy field
     existing.updatedAt = now;
     writeAll(snippets);
     return existing;
@@ -54,7 +61,7 @@ export function saveSnippet(name, code) {
   const snippet = {
     id: generateId(),
     name,
-    code,
+    files,
     createdAt: now,
     updatedAt: now,
   };
@@ -64,11 +71,19 @@ export function saveSnippet(name, code) {
 }
 
 /**
- * Return all saved snippets.
+ * Return all saved snippets (migrating old format if needed).
  * @returns {Array<object>} Array of snippet objects
  */
 export function loadSnippets() {
-  return readAll();
+  const snippets = readAll();
+  // Migrate old single-code snippets to files format
+  for (const s of snippets) {
+    if (!s.files && s.code !== undefined) {
+      s.files = [{ name: 'main.py', code: s.code }];
+      delete s.code;
+    }
+  }
+  return snippets;
 }
 
 /**

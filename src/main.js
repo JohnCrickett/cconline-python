@@ -1,7 +1,13 @@
 import './style.css';
 import { initWorker, runCode, stopExecution, onStatus, retryLoad } from './executor.js';
-import { initEditor, getCode, setCode } from './editor.js';
+import { initEditor, getCode, setCode, setEditorTheme } from './editor.js';
 import { saveSnippet, loadSnippets, deleteSnippet } from './snippets.js';
+import { initTheme, toggleTheme, getTheme } from './theme.js';
+import {
+  initFiles, getFiles, getActiveFile, setActiveFile,
+  getFileCode, setFileCode, addFile, deleteFile,
+  getAllFilesForExecution, loadFromSnippet, exportForSnippet
+} from './files.js';
 
 const runBtn = document.getElementById('run-btn');
 const stopBtn = document.getElementById('stop-btn');
@@ -65,12 +71,104 @@ onStatus((status) => {
     output.appendChild(retryBtn);
 
     runBtn.disabled = true;
+  } else if (status.type === 'package-loading') {
+    output.innerHTML = '<span class="spinner"></span> 📦 Loading packages: ' + status.packages.join(', ') + '…';
+    output.classList.remove('error', 'timeout-error');
+  } else if (status.type === 'packages-loaded') {
+    output.innerHTML = '<span class="spinner"></span> Running…';
+    output.classList.remove('error', 'timeout-error');
   }
 });
 
 // Initialize CodeMirror editor
 const editorContainer = document.getElementById('editor-container');
 initEditor(editorContainer);
+
+// ── Multi-file project tabs ──────────────────────────────────────────
+initFiles();
+
+function renderFileTabs() {
+  const fileTabs = document.getElementById('file-tabs');
+  if (!fileTabs) return;
+  fileTabs.innerHTML = '';
+
+  const files = getFiles();
+  const active = getActiveFile();
+
+  files.forEach((file) => {
+    const tab = document.createElement('button');
+    tab.className = 'file-tab' + (file.name === active ? ' active' : '');
+    tab.textContent = file.name;
+    tab.addEventListener('click', () => {
+      // Save current editor content before switching
+      setFileCode(getActiveFile(), getCode());
+      setActiveFile(file.name);
+      setCode(getFileCode(file.name));
+      renderFileTabs();
+    });
+
+    // Add delete button for non-main.py files
+    if (file.name !== 'main.py') {
+      const delBtn = document.createElement('span');
+      delBtn.className = 'file-tab-delete';
+      delBtn.textContent = '×';
+      delBtn.title = 'Delete ' + file.name;
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (window.confirm(`Delete "${file.name}"?`)) {
+          // Save current editor content first
+          setFileCode(getActiveFile(), getCode());
+          deleteFile(file.name);
+          setCode(getFileCode(getActiveFile()));
+          renderFileTabs();
+        }
+      });
+      tab.appendChild(delBtn);
+    }
+
+    fileTabs.appendChild(tab);
+  });
+
+  // Add "+" button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'file-tab-add';
+  addBtn.textContent = '+';
+  addBtn.title = 'Add new file';
+  addBtn.addEventListener('click', () => {
+    let name = window.prompt('New file name (must end in .py):');
+    if (!name || !name.trim()) return;
+    name = name.trim();
+    if (!name.endsWith('.py')) name += '.py';
+    try {
+      // Save current editor content before switching
+      setFileCode(getActiveFile(), getCode());
+      addFile(name);
+      setActiveFile(name);
+      setCode(getFileCode(name));
+      renderFileTabs();
+    } catch (err) {
+      window.alert(err.message);
+    }
+  });
+  fileTabs.appendChild(addBtn);
+}
+
+renderFileTabs();
+
+// ── Theme toggle ────────────────────────────────────────────────────
+initTheme((theme) => setEditorTheme(theme));
+setEditorTheme(getTheme());
+
+function updateToggleIcon() {
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = getTheme() === 'dark' ? '☀️' : '🌙';
+}
+updateToggleIcon();
+
+document.getElementById('theme-toggle').addEventListener('click', () => {
+  toggleTheme();
+  updateToggleIcon();
+});
 
 /**
  * Parse a Python traceback string into structured parts.
@@ -140,6 +238,8 @@ function showDuration(seconds) {
 }
 
 runBtn.addEventListener('click', async () => {
+  // Save current editor content before running
+  setFileCode(getActiveFile(), getCode());
   const code = getCode();
   if (!code.trim()) {
     // Clear previous output when running empty code
@@ -157,7 +257,7 @@ runBtn.addEventListener('click', async () => {
   setExecutionState(true);
 
   try {
-    const { output: result, duration } = await runCode(code);
+    const { output: result, duration } = await runCode(code, getAllFilesForExecution());
     output.textContent = result || '(no output)';
     showDuration(duration);
   } catch (err) {
@@ -211,7 +311,9 @@ function renderSnippetList() {
     nameBtn.textContent = snippet.name;
     nameBtn.title = 'Load this snippet';
     nameBtn.addEventListener('click', () => {
-      setCode(snippet.code);
+      loadFromSnippet(snippet);
+      setCode(getFileCode(getActiveFile()));
+      renderFileTabs();
     });
 
     const delBtn = document.createElement('button');
@@ -232,14 +334,18 @@ function renderSnippetList() {
 }
 
 saveBtn.addEventListener('click', () => {
-  const code = getCode();
-  if (!code.trim()) return;
+  // Save current editor content before exporting
+  setFileCode(getActiveFile(), getCode());
+  const files = exportForSnippet();
+  // Check if there's any code to save
+  const hasCode = files.some((f) => f.code.trim());
+  if (!hasCode) return;
 
   const name = window.prompt('Snippet name:');
   if (!name || !name.trim()) return;
 
   try {
-    saveSnippet(name.trim(), code);
+    saveSnippet(name.trim(), files);
     renderSnippetList();
   } catch (err) {
     window.alert(err.message);
