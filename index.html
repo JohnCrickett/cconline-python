@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Python Playground</title>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <h1>Python Playground</h1>
+      </header>
+      <main>
+        <section id="editor-section">
+          <div id="editor-container"></div>
+          <div id="editor-actions">
+            <button id="run-btn">Run</button>
+            <button id="stop-btn" class="hidden">Stop</button>
+            <button id="save-btn">Save</button>
+          </div>
+        </section>
+        <section id="snippet-section">
+          <h2>Saved Snippets</h2>
+          <ul id="snippet-list"></ul>
+        </section>
+        <section id="output-section">
+          <div class="output-header">
+            <h2>Output</h2>
+            <span id="execution-duration" class="hidden"></span>
+          </div>
+          <pre id="output"></pre>
+        </section>
+      </main>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -16,7 +16,19 @@ function readAll() {
 }
 
 function writeAll(snippets) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(snippets));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(snippets));
+  } catch (err) {
+    if (
+      err.name === 'QuotaExceededError' ||
+      (err instanceof DOMException && err.code === 22)
+    ) {
+      throw new Error(
+        'Storage is full. Delete some snippets to free up space.'
+      );
+    }
+    throw err;
+  }
 }
 
 /**
