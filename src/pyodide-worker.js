@@ -44,7 +44,7 @@ function detectImports(code, projectFiles) {
   );
 
   // Match: import X, import X as Y, from X import ...
-  const importRegex = /^(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gm;
+  const importRegex = /^\s*(?!#)(?:import|from)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gm;
   let match;
   while ((match = importRegex.exec(code)) !== null) {
     const mod = match[1];
