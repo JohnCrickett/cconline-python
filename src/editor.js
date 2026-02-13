@@ -4,8 +4,12 @@ import { python } from '@codemirror/lang-python';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { keymap } from '@codemirror/view';
 import { indentWithTab } from '@codemirror/commands';
+import { Compartment } from '@codemirror/state';
+import { autocompletion } from '@codemirror/autocomplete';
+import { pythonCompletionSource } from './autocomplete.js';
 
 let editorView = null;
+const themeCompartment = new Compartment();
 
 /**
  * Initialize CodeMirror 6 in the given container element.
@@ -18,9 +22,10 @@ export function initEditor(container) {
     extensions: [
       basicSetup,
       python(),
-      oneDark,
+      themeCompartment.of(oneDark),
       keymap.of([indentWithTab]),
       EditorView.lineWrapping,
+      autocompletion({ override: [pythonCompletionSource] }),
     ],
     parent: container,
   });
@@ -52,3 +57,16 @@ export function setCode(code) {
   });
 }
 
+
+/**
+ * Dynamically swap the CodeMirror theme between dark and light.
+ * @param {'dark' | 'light'} themeName
+ */
+export function setEditorTheme(themeName) {
+  if (!editorView) return;
+  editorView.dispatch({
+    effects: themeCompartment.reconfigure(
+      themeName === 'dark' ? oneDark : [],
+    ),
+  });
+}
