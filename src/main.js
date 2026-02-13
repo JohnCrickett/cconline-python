@@ -1,6 +1,7 @@
 import './style.css';
 import { initWorker, runCode, stopExecution, onStatus, retryLoad } from './executor.js';
-import { initEditor, getCode, setCode, setEditorTheme } from './editor.js';
+import { initGoWorker, runGoCode, stopGoExecution, onGoStatus, retryGoLoad } from './go-executor.js';
+import { initEditor, getCode, setCode, setEditorTheme, setEditorLanguage } from './editor.js';
 import { saveSnippet, loadSnippets, deleteSnippet } from './snippets.js';
 import { initTheme, toggleTheme, getTheme } from './theme.js';
 import {
@@ -13,12 +14,16 @@ const runBtn = document.getElementById('run-btn');
 const stopBtn = document.getElementById('stop-btn');
 const output = document.getElementById('output');
 const executionDuration = document.getElementById('execution-duration');
+const languageSelect = document.getElementById('language-select');
+
+let currentLanguage = 'python';
+let goWorkerInitialized = false;
 
 // ── WebAssembly detection ──────────────────────────────────────────
 if (typeof WebAssembly !== 'object') {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <header><h1>Python Playground</h1></header>
+    <header><h1>Code Playground</h1></header>
     <div class="wasm-unsupported">
       <h2>⚠ WebAssembly Not Supported</h2>
       <p>Your browser doesn't support WebAssembly. Please upgrade to a modern browser
@@ -80,9 +85,71 @@ onStatus((status) => {
   }
 });
 
+onGoStatus((status) => {
+  if (status.type === 'loading') {
+    output.innerHTML = '<span class="spinner"></span> ' + status.message;
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = true;
+  } else if (status.type === 'ready') {
+    output.textContent = 'Go runtime ready.';
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = false;
+  } else if (status.type === 'load-error') {
+    output.innerHTML = '';
+    output.classList.add('error');
+    output.classList.remove('timeout-error');
+
+    const msgEl = document.createElement('div');
+    msgEl.textContent = 'Failed to load Go runtime. Check your internet connection.';
+    output.appendChild(msgEl);
+
+    if (status.error) {
+      const detailEl = document.createElement('div');
+      detailEl.className = 'error-detail';
+      detailEl.textContent = status.error;
+      output.appendChild(detailEl);
+    }
+
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => {
+      retryGoLoad();
+    });
+    output.appendChild(retryBtn);
+
+    runBtn.disabled = true;
+  }
+});
+
 // Initialize CodeMirror editor
 const editorContainer = document.getElementById('editor-container');
 initEditor(editorContainer);
+
+// ── Language selector ────────────────────────────────────────────────
+languageSelect.addEventListener('change', () => {
+  // Save current editor content
+  setFileCode(getActiveFile(), getCode());
+
+  currentLanguage = languageSelect.value;
+  setEditorLanguage(currentLanguage);
+  initFiles(currentLanguage);
+  setCode(getFileCode(getActiveFile()));
+  renderFileTabs();
+
+  // Lazy-load Go worker on first selection
+  if (currentLanguage === 'go' && !goWorkerInitialized) {
+    goWorkerInitialized = true;
+    initGoWorker();
+  }
+
+  // Update output panel
+  if (currentLanguage === 'python') {
+    if (pyodideLoaded) {
+      output.textContent = 'Python runtime ready.';
+    }
+  }
+});
 
 // ── Multi-file project tabs ──────────────────────────────────────────
 initFiles();
@@ -107,8 +174,9 @@ function renderFileTabs() {
       renderFileTabs();
     });
 
-    // Add delete button for non-main.py files
-    if (file.name !== 'main.py') {
+    // Add delete button for non-main files
+    const mainFile = currentLanguage === 'go' ? 'main.go' : 'main.py';
+    if (file.name !== mainFile) {
       const delBtn = document.createElement('span');
       delBtn.className = 'file-tab-delete';
       delBtn.textContent = '×';
@@ -135,14 +203,15 @@ function renderFileTabs() {
   addBtn.textContent = '+';
   addBtn.title = 'Add new file';
   addBtn.addEventListener('click', () => {
-    let name = window.prompt('New file name (must end in .py):');
+    const ext = currentLanguage === 'go' ? '.go' : '.py';
+    let name = window.prompt(`New file name (must end in ${ext}):`);
     if (!name || !name.trim()) return;
     name = name.trim();
-    if (!name.endsWith('.py')) name += '.py';
+    if (!name.endsWith(ext)) name += ext;
     try {
       // Save current editor content before switching
       setFileCode(getActiveFile(), getCode());
-      addFile(name);
+      addFile(name, currentLanguage);
       setActiveFile(name);
       setCode(getFileCode(name));
       renderFileTabs();
@@ -238,11 +307,9 @@ function showDuration(seconds) {
 }
 
 runBtn.addEventListener('click', async () => {
-  // Save current editor content before running
   setFileCode(getActiveFile(), getCode());
   const code = getCode();
   if (!code.trim()) {
-    // Clear previous output when running empty code
     output.textContent = '';
     output.classList.remove('error', 'timeout-error');
     executionDuration.classList.add('hidden');
@@ -250,16 +317,20 @@ runBtn.addEventListener('click', async () => {
     return;
   }
 
-  // Clear previous output and show loading spinner
-  output.innerHTML = '<span class="spinner"></span> Running\u2026';
+  output.innerHTML = '<span class="spinner"></span> Running…';
   output.classList.remove('error');
   output.classList.remove('timeout-error');
   setExecutionState(true);
 
   try {
-    const { output: result, duration } = await runCode(code, getAllFilesForExecution());
-    output.textContent = result || '(no output)';
-    showDuration(duration);
+    let result;
+    if (currentLanguage === 'go') {
+      result = await runGoCode(code);
+    } else {
+      result = await runCode(code, getAllFilesForExecution());
+    }
+    output.textContent = result.output || '(no output)';
+    showDuration(result.duration);
   } catch (err) {
     if (err.isTimeout) {
       output.innerHTML = '';
@@ -277,7 +348,11 @@ runBtn.addEventListener('click', async () => {
 });
 
 stopBtn.addEventListener('click', () => {
-  stopExecution();
+  if (currentLanguage === 'go') {
+    stopGoExecution();
+  } else {
+    stopExecution();
+  }
   output.textContent = 'Execution stopped.';
   output.classList.remove('error');
   output.classList.remove('timeout-error');
@@ -311,6 +386,16 @@ function renderSnippetList() {
     nameBtn.textContent = snippet.name;
     nameBtn.title = 'Load this snippet';
     nameBtn.addEventListener('click', () => {
+      const snippetLang = snippet.language || 'python';
+      if (snippetLang !== currentLanguage) {
+        currentLanguage = snippetLang;
+        languageSelect.value = currentLanguage;
+        setEditorLanguage(currentLanguage);
+        if (currentLanguage === 'go' && !goWorkerInitialized) {
+          goWorkerInitialized = true;
+          initGoWorker();
+        }
+      }
       loadFromSnippet(snippet);
       setCode(getFileCode(getActiveFile()));
       renderFileTabs();
@@ -345,7 +430,7 @@ saveBtn.addEventListener('click', () => {
   if (!name || !name.trim()) return;
 
   try {
-    saveSnippet(name.trim(), files);
+    saveSnippet(name.trim(), files, currentLanguage);
     renderSnippetList();
   } catch (err) {
     window.alert(err.message);

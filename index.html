@@ -4,12 +4,16 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Python Playground</title>
+    <title>Code Playground</title>
   </head>
   <body>
     <div id="app">
       <header>
-        <h1>Python Playground</h1>
+        <h1>Code Playground</h1>
+        <select id="language-select" title="Select language" aria-label="Select language">
+          <option value="python" selected>Python</option>
+          <option value="go">Go</option>
+        </select>
         <button id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">🌙</button>
       </header>
       <main>

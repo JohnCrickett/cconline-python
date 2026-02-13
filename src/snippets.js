@@ -37,20 +37,21 @@ function writeAll(snippets) {
  * @param {string|Array} filesOrCode - Array of {name, code} or a single code string (backward compat)
  * @returns {object} The saved snippet object
  */
-export function saveSnippet(name, filesOrCode) {
+export function saveSnippet(name, filesOrCode, language = 'python') {
   const snippets = readAll();
   const now = new Date().toISOString();
 
   // Normalize: string → files array for backward compat
   const files =
     typeof filesOrCode === 'string'
-      ? [{ name: 'main.py', code: filesOrCode }]
+      ? [{ name: language === 'go' ? 'main.go' : 'main.py', code: filesOrCode }]
       : filesOrCode;
 
   // Update existing snippet with the same name
   const existing = snippets.find((s) => s.name === name);
   if (existing) {
     existing.files = files;
+    existing.language = language;
     delete existing.code; // remove legacy field
     existing.updatedAt = now;
     writeAll(snippets);
@@ -62,6 +63,7 @@ export function saveSnippet(name, filesOrCode) {
     id: generateId(),
     name,
     files,
+    language,
     createdAt: now,
     updatedAt: now,
   };
@@ -81,6 +83,10 @@ export function loadSnippets() {
     if (!s.files && s.code !== undefined) {
       s.files = [{ name: 'main.py', code: s.code }];
       delete s.code;
+    }
+    // Default language for old snippets
+    if (!s.language) {
+      s.language = 'python';
     }
   }
   return snippets;

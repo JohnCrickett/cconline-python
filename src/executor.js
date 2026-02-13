@@ -7,6 +7,8 @@ let messageId = 0;
 const pendingRequests = new Map();
 let readyResolve = null;
 let readyReject = null;
+let currentTimeoutId = null;
+let currentExecutionId = null;
 let workerReady = new Promise((resolve, reject) => {
   readyResolve = resolve;
   readyReject = reject;
@@ -64,12 +66,30 @@ function setupWorker() {
       if (onStatusCallback) {
         onStatusCallback({ type: 'package-loading', packages: event.data.packages });
       }
+      // Pause timeout during package downloading
+      if (id === currentExecutionId && currentTimeoutId !== null) {
+        clearTimeout(currentTimeoutId);
+        currentTimeoutId = null;
+      }
       return;
     }
 
     if (type === 'packages-loaded') {
       if (onStatusCallback) {
         onStatusCallback({ type: 'packages-loaded' });
+      }
+      // Restart timeout now that packages are loaded — fresh 10s for code execution
+      if (id === currentExecutionId && pendingRequests.has(id)) {
+        currentTimeoutId = setTimeout(() => {
+          if (pendingRequests.has(id)) {
+            const pending = pendingRequests.get(id);
+            const err = new Error(
+              `⏱ Execution timed out after ${EXECUTION_TIMEOUT / 1000} seconds. Your code may contain an infinite loop.`
+            );
+            err.isTimeout = true;
+            pending.reject(err);
+          }
+        }, EXECUTION_TIMEOUT);
       }
       return;
     }
@@ -160,8 +180,9 @@ export async function runCode(code, files) {
     }
   });
 
+  currentExecutionId = id;
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
+    currentTimeoutId = setTimeout(() => {
       if (pendingRequests.has(id)) {
         const err = new Error(
           `⏱ Execution timed out after ${EXECUTION_TIMEOUT / 1000} seconds. Your code may contain an infinite loop.`
@@ -176,10 +197,20 @@ export async function runCode(code, files) {
     const result = await Promise.race([executionPromise, timeoutPromise]);
     const duration = ((performance.now() - startTime) / 1000).toFixed(2);
     isExecuting = false;
+    if (currentTimeoutId !== null) {
+      clearTimeout(currentTimeoutId);
+      currentTimeoutId = null;
+    }
+    currentExecutionId = null;
     return { output: result, duration };
   } catch (err) {
     const duration = ((performance.now() - startTime) / 1000).toFixed(2);
     isExecuting = false;
+    if (currentTimeoutId !== null) {
+      clearTimeout(currentTimeoutId);
+      currentTimeoutId = null;
+    }
+    currentExecutionId = null;
     if (err.isTimeout) {
       // Terminate and recreate the worker for timeout
       recreateWorker();
