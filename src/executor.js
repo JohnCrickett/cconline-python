@@ -12,7 +12,7 @@ export function initWorker() {
   worker = new Worker(new URL('./pyodide-worker.js', import.meta.url));
 
   worker.onmessage = function (event) {
-    const { type, output, error, id } = event.data;
+    const { type, output, error, stdout, id } = event.data;
 
     if (type === 'ready') {
       readyResolve();
@@ -27,7 +27,9 @@ export function initWorker() {
     if (type === 'result') {
       pending.resolve(output);
     } else if (type === 'error') {
-      pending.reject(new Error(error));
+      const err = new Error(error);
+      err.stdout = stdout || '';
+      pending.reject(err);
     }
   };
 

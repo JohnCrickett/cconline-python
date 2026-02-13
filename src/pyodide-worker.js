@@ -29,7 +29,13 @@ self.onmessage = async function (event) {
     pyodide.runPython(code);
     self.postMessage({ type: 'result', output: output, id });
   } catch (err) {
-    self.postMessage({ type: 'error', error: err.message, id });
+    // Send full traceback and any stdout captured before the error
+    self.postMessage({
+      type: 'error',
+      error: err.message,
+      stdout: output,
+      id,
+    });
   }
 };
 
