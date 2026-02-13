@@ -1,18 +1,26 @@
 // Multi-file project state management
 
 const DEFAULT_CODE = 'print("Hello, World!")';
+const DEFAULT_GO_CODE = 'package main\n\nimport "fmt"\n\nfunc main() {\n\tfmt.Println("Hello, World!")\n}';
 
 let state = {
   files: [{ name: 'main.py', code: DEFAULT_CODE }],
   activeFile: 'main.py',
 };
 
-/** Initialize files state with default main.py */
-export function initFiles() {
-  state = {
-    files: [{ name: 'main.py', code: DEFAULT_CODE }],
-    activeFile: 'main.py',
-  };
+/** Initialize files state with default main file for the given language */
+export function initFiles(language = 'python') {
+  if (language === 'go') {
+    state = {
+      files: [{ name: 'main.go', code: DEFAULT_GO_CODE }],
+      activeFile: 'main.go',
+    };
+  } else {
+    state = {
+      files: [{ name: 'main.py', code: DEFAULT_CODE }],
+      activeFile: 'main.py',
+    };
+  }
 }
 
 /** Returns all files array */
@@ -46,20 +54,21 @@ export function setFileCode(name, code) {
   file.code = code;
 }
 
-/** Creates a new .py file */
-export function addFile(name) {
+/** Creates a new file with the appropriate extension */
+export function addFile(name, language = 'python') {
   if (!name || !name.trim()) throw new Error('File name cannot be empty.');
   name = name.trim();
-  if (!name.endsWith('.py')) throw new Error('File name must end in .py');
+  const ext = language === 'go' ? '.go' : '.py';
+  if (!name.endsWith(ext)) throw new Error(`File name must end in ${ext}`);
   if (state.files.some((f) => f.name === name)) {
     throw new Error(`File "${name}" already exists.`);
   }
   state.files.push({ name, code: '' });
 }
 
-/** Removes a file (cannot delete last file or main.py) */
+/** Removes a file (cannot delete last file or main.py/main.go) */
 export function deleteFile(name) {
-  if (name === 'main.py') throw new Error('Cannot delete main.py');
+  if (name === 'main.py' || name === 'main.go') throw new Error(`Cannot delete ${name}`);
   if (state.files.length <= 1) throw new Error('Cannot delete the last file.');
   state.files = state.files.filter((f) => f.name !== name);
   if (state.activeFile === name) {
@@ -68,10 +77,11 @@ export function deleteFile(name) {
 }
 
 /** Renames a file */
-export function renameFile(oldName, newName) {
+export function renameFile(oldName, newName, language = 'python') {
   if (!newName || !newName.trim()) throw new Error('New file name cannot be empty.');
   newName = newName.trim();
-  if (!newName.endsWith('.py')) throw new Error('File name must end in .py');
+  const ext = language === 'go' ? '.go' : '.py';
+  if (!newName.endsWith(ext)) throw new Error(`File name must end in ${ext}`);
   if (state.files.some((f) => f.name === newName)) {
     throw new Error(`File "${newName}" already exists.`);
   }
