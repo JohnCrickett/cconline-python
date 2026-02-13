@@ -6,19 +6,57 @@ let worker = null;
 let messageId = 0;
 const pendingRequests = new Map();
 let readyResolve = null;
-let workerReady = new Promise((resolve) => {
+let readyReject = null;
+let workerReady = new Promise((resolve, reject) => {
   readyResolve = resolve;
+  readyReject = reject;
 });
 let isExecuting = false;
 
+// Callback for status updates (loading, load-error)
+let onStatusCallback = null;
+
+export function onStatus(callback) {
+  onStatusCallback = callback;
+}
+
 function setupWorker() {
-  worker = new Worker(new URL('./pyodide-worker.js', import.meta.url));
+  try {
+    worker = new Worker(new URL('./pyodide-worker.js', import.meta.url));
+  } catch (err) {
+    console.error('Failed to create worker:', err);
+    if (onStatusCallback) {
+      onStatusCallback({
+        type: 'load-error',
+        error: 'Failed to start Python worker. Your browser may not support Web Workers.',
+      });
+    }
+    return;
+  }
 
   worker.onmessage = function (event) {
-    const { type, output, error, stdout, id } = event.data;
+    const { type, output, error, stdout, id, message } = event.data;
+
+    if (type === 'loading') {
+      if (onStatusCallback) {
+        onStatusCallback({ type: 'loading', message: message });
+      }
+      return;
+    }
 
     if (type === 'ready') {
+      if (onStatusCallback) {
+        onStatusCallback({ type: 'ready' });
+      }
       readyResolve();
+      return;
+    }
+
+    if (type === 'load-error') {
+      if (onStatusCallback) {
+        onStatusCallback({ type: 'load-error', error: error });
+      }
+      readyReject(new Error(error));
       return;
     }
 
@@ -38,6 +76,12 @@ function setupWorker() {
 
   worker.onerror = function (err) {
     console.error('Worker error:', err);
+    if (onStatusCallback) {
+      onStatusCallback({
+        type: 'load-error',
+        error: 'Python worker encountered an error. Try refreshing the page.',
+      });
+    }
   };
 }
 
@@ -47,20 +91,37 @@ function recreateWorker() {
     worker = null;
   }
   // Reject all pending requests
-  for (const [id, pending] of pendingRequests) {
+  for (const [, pending] of pendingRequests) {
     pending.reject(new Error('Execution cancelled'));
   }
   pendingRequests.clear();
   isExecuting = false;
 
   // Reset the ready promise
-  workerReady = new Promise((resolve) => {
+  workerReady = new Promise((resolve, reject) => {
     readyResolve = resolve;
+    readyReject = reject;
   });
   setupWorker();
 }
 
 export function initWorker() {
+  setupWorker();
+}
+
+/**
+ * Retry loading Pyodide by sending a reload message to the worker.
+ */
+export function retryLoad() {
+  if (worker) {
+    worker.terminate();
+    worker = null;
+  }
+  // Reset the ready promise
+  workerReady = new Promise((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
   setupWorker();
 }
 
@@ -77,7 +138,12 @@ export async function runCode(code) {
 
   const executionPromise = new Promise((resolve, reject) => {
     pendingRequests.set(id, { resolve, reject });
-    worker.postMessage({ type: 'run', code, id });
+    try {
+      worker.postMessage({ type: 'run', code, id });
+    } catch (err) {
+      pendingRequests.delete(id);
+      reject(new Error('Failed to send code to worker: ' + err.message));
+    }
   });
 
   const timeoutPromise = new Promise((_, reject) => {
