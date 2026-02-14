@@ -9,6 +9,11 @@ import { Compartment } from '@codemirror/state';
 import { autocompletion } from '@codemirror/autocomplete';
 import { pythonCompletionSource } from './autocomplete.js';
 import { goCompletionSource } from './go-autocomplete.js';
+import { javascript } from '@codemirror/lang-javascript';
+import { sql } from '@codemirror/lang-sql';
+import { jsCompletionSource } from './js-autocomplete.js';
+import { tsCompletionSource } from './ts-autocomplete.js';
+import { sqlCompletionSource } from './sql-autocomplete.js';
 
 let editorView = null;
 const themeCompartment = new Compartment();
@@ -81,11 +86,38 @@ export function setEditorTheme(themeName) {
  */
 export function setEditorLanguage(lang) {
   if (!editorView) return;
+
+  let langExtension;
+  let completionSource;
+
+  switch (lang) {
+    case 'go':
+      langExtension = go();
+      completionSource = goCompletionSource;
+      break;
+    case 'javascript':
+      langExtension = javascript();
+      completionSource = jsCompletionSource;
+      break;
+    case 'typescript':
+      langExtension = javascript({ typescript: true });
+      completionSource = tsCompletionSource;
+      break;
+    case 'sql':
+      langExtension = sql();
+      completionSource = sqlCompletionSource;
+      break;
+    default: // python
+      langExtension = python();
+      completionSource = pythonCompletionSource;
+      break;
+  }
+
   editorView.dispatch({
     effects: [
-      languageCompartment.reconfigure(lang === 'go' ? go() : python()),
+      languageCompartment.reconfigure(langExtension),
       autocompleteCompartment.reconfigure(
-        autocompletion({ override: [lang === 'go' ? goCompletionSource : pythonCompletionSource] })
+        autocompletion({ override: [completionSource] })
       ),
     ],
   });
