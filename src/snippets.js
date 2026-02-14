@@ -44,7 +44,7 @@ export function saveSnippet(name, filesOrCode, language = 'python') {
   // Normalize: string → files array for backward compat
   const files =
     typeof filesOrCode === 'string'
-      ? [{ name: language === 'go' ? 'main.go' : 'main.py', code: filesOrCode }]
+      ? [{ name: { go: 'main.go', javascript: 'main.js', typescript: 'main.ts', sql: 'main.sql' }[language] || 'main.py', code: filesOrCode }]
       : filesOrCode;
 
   // Update existing snippet with the same name

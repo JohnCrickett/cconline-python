@@ -1,13 +1,16 @@
 import './style.css';
 import { initWorker, runCode, stopExecution, onStatus, retryLoad } from './executor.js';
 import { initGoWorker, runGoCode, stopGoExecution, onGoStatus, retryGoLoad } from './go-executor.js';
+import { initJsWorker, runJsCode, stopJsExecution, onJsStatus, retryJsLoad } from './js-executor.js';
+import { initTsWorker, runTsCode, stopTsExecution, onTsStatus, retryTsLoad } from './ts-executor.js';
+import { initSqlWorker, runSqlCode, stopSqlExecution, onSqlStatus, retrySqlLoad } from './sql-executor.js';
 import { initEditor, getCode, setCode, setEditorTheme, setEditorLanguage } from './editor.js';
 import { saveSnippet, loadSnippets, deleteSnippet } from './snippets.js';
 import { initTheme, toggleTheme, getTheme } from './theme.js';
 import {
   initFiles, getFiles, getActiveFile, setActiveFile,
   getFileCode, setFileCode, addFile, deleteFile,
-  getAllFilesForExecution, loadFromSnippet, exportForSnippet
+  getAllFilesForExecution, loadFromSnippet, exportForSnippet, getLangConfig
 } from './files.js';
 
 const runBtn = document.getElementById('run-btn');
@@ -18,6 +21,9 @@ const languageSelect = document.getElementById('language-select');
 
 let currentLanguage = 'python';
 let goWorkerInitialized = false;
+let jsWorkerInitialized = false;
+let tsWorkerInitialized = false;
+let sqlWorkerInitialized = false;
 
 // ── WebAssembly detection ──────────────────────────────────────────
 if (typeof WebAssembly !== 'object') {
@@ -122,6 +128,89 @@ onGoStatus((status) => {
   }
 });
 
+onJsStatus((status) => {
+  if (status.type === 'ready') {
+    output.textContent = 'JavaScript ready.';
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = false;
+  } else if (status.type === 'load-error') {
+    output.innerHTML = '';
+    output.classList.add('error');
+    output.classList.remove('timeout-error');
+    const msgEl = document.createElement('div');
+    msgEl.textContent = 'Failed to initialize JavaScript worker.';
+    output.appendChild(msgEl);
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => { retryJsLoad(); });
+    output.appendChild(retryBtn);
+    runBtn.disabled = true;
+  }
+});
+
+onTsStatus((status) => {
+  if (status.type === 'loading') {
+    output.innerHTML = '<span class="spinner"></span> ' + status.message;
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = true;
+  } else if (status.type === 'ready') {
+    output.textContent = 'TypeScript compiler ready.';
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = false;
+  } else if (status.type === 'load-error') {
+    output.innerHTML = '';
+    output.classList.add('error');
+    output.classList.remove('timeout-error');
+    const msgEl = document.createElement('div');
+    msgEl.textContent = 'Failed to load TypeScript compiler.';
+    output.appendChild(msgEl);
+    if (status.error) {
+      const detailEl = document.createElement('div');
+      detailEl.className = 'error-detail';
+      detailEl.textContent = status.error;
+      output.appendChild(detailEl);
+    }
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => { retryTsLoad(); });
+    output.appendChild(retryBtn);
+    runBtn.disabled = true;
+  }
+});
+
+onSqlStatus((status) => {
+  if (status.type === 'loading') {
+    output.innerHTML = '<span class="spinner"></span> ' + status.message;
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = true;
+  } else if (status.type === 'ready') {
+    output.textContent = 'SQLite runtime ready.';
+    output.classList.remove('error', 'timeout-error');
+    runBtn.disabled = false;
+  } else if (status.type === 'load-error') {
+    output.innerHTML = '';
+    output.classList.add('error');
+    output.classList.remove('timeout-error');
+    const msgEl = document.createElement('div');
+    msgEl.textContent = 'Failed to load SQLite runtime. Check your internet connection.';
+    output.appendChild(msgEl);
+    if (status.error) {
+      const detailEl = document.createElement('div');
+      detailEl.className = 'error-detail';
+      detailEl.textContent = status.error;
+      output.appendChild(detailEl);
+    }
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.addEventListener('click', () => { retrySqlLoad(); });
+    output.appendChild(retryBtn);
+    runBtn.disabled = true;
+  }
+});
+
 // Initialize CodeMirror editor
 const editorContainer = document.getElementById('editor-container');
 initEditor(editorContainer);
@@ -137,17 +226,27 @@ languageSelect.addEventListener('change', () => {
   setCode(getFileCode(getActiveFile()));
   renderFileTabs();
 
-  // Lazy-load Go worker on first selection
+  // Lazy-load runtimes on first selection
   if (currentLanguage === 'go' && !goWorkerInitialized) {
     goWorkerInitialized = true;
     initGoWorker();
+  } else if (currentLanguage === 'javascript' && !jsWorkerInitialized) {
+    jsWorkerInitialized = true;
+    initJsWorker();
+  } else if (currentLanguage === 'typescript' && !tsWorkerInitialized) {
+    tsWorkerInitialized = true;
+    initTsWorker();
+  } else if (currentLanguage === 'sql' && !sqlWorkerInitialized) {
+    sqlWorkerInitialized = true;
+    initSqlWorker();
   }
 
-  // Update output panel
-  if (currentLanguage === 'python') {
-    if (pyodideLoaded) {
-      output.textContent = 'Python runtime ready.';
-    }
+  // Update output panel for ready runtimes
+  if (currentLanguage === 'python' && pyodideLoaded) {
+    output.textContent = 'Python runtime ready.';
+  } else if (currentLanguage === 'javascript') {
+    // JS is always ready instantly (no runtime to load)
+    output.textContent = 'JavaScript ready.';
   }
 });
 
@@ -175,7 +274,7 @@ function renderFileTabs() {
     });
 
     // Add delete button for non-main files
-    const mainFile = currentLanguage === 'go' ? 'main.go' : 'main.py';
+    const { mainFile } = getLangConfig(currentLanguage);
     if (file.name !== mainFile) {
       const delBtn = document.createElement('span');
       delBtn.className = 'file-tab-delete';
@@ -203,7 +302,7 @@ function renderFileTabs() {
   addBtn.textContent = '+';
   addBtn.title = 'Add new file';
   addBtn.addEventListener('click', () => {
-    const ext = currentLanguage === 'go' ? '.go' : '.py';
+    const { ext } = getLangConfig(currentLanguage);
     let name = window.prompt(`New file name (must end in ${ext}):`);
     if (!name || !name.trim()) return;
     name = name.trim();
@@ -324,10 +423,22 @@ runBtn.addEventListener('click', async () => {
 
   try {
     let result;
-    if (currentLanguage === 'go') {
-      result = await runGoCode(code);
-    } else {
-      result = await runCode(code, getAllFilesForExecution());
+    switch (currentLanguage) {
+      case 'go':
+        result = await runGoCode(code);
+        break;
+      case 'javascript':
+        result = await runJsCode(code);
+        break;
+      case 'typescript':
+        result = await runTsCode(code);
+        break;
+      case 'sql':
+        result = await runSqlCode(code);
+        break;
+      default: // python
+        result = await runCode(code, getAllFilesForExecution());
+        break;
     }
     output.textContent = result.output || '(no output)';
     showDuration(result.duration);
@@ -348,10 +459,12 @@ runBtn.addEventListener('click', async () => {
 });
 
 stopBtn.addEventListener('click', () => {
-  if (currentLanguage === 'go') {
-    stopGoExecution();
-  } else {
-    stopExecution();
+  switch (currentLanguage) {
+    case 'go': stopGoExecution(); break;
+    case 'javascript': stopJsExecution(); break;
+    case 'typescript': stopTsExecution(); break;
+    case 'sql': stopSqlExecution(); break;
+    default: stopExecution(); break;
   }
   output.textContent = 'Execution stopped.';
   output.classList.remove('error');
@@ -391,9 +504,19 @@ function renderSnippetList() {
         currentLanguage = snippetLang;
         languageSelect.value = currentLanguage;
         setEditorLanguage(currentLanguage);
+        // Lazy-load runtime if needed
         if (currentLanguage === 'go' && !goWorkerInitialized) {
           goWorkerInitialized = true;
           initGoWorker();
+        } else if (currentLanguage === 'javascript' && !jsWorkerInitialized) {
+          jsWorkerInitialized = true;
+          initJsWorker();
+        } else if (currentLanguage === 'typescript' && !tsWorkerInitialized) {
+          tsWorkerInitialized = true;
+          initTsWorker();
+        } else if (currentLanguage === 'sql' && !sqlWorkerInitialized) {
+          sqlWorkerInitialized = true;
+          initSqlWorker();
         }
       }
       loadFromSnippet(snippet);
